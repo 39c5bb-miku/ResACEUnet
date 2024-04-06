@@ -15,11 +15,7 @@ fault_detection/
       │        │        └───── val/
       │        │                  ├───── images  # 20 val data put here
       │        │                  └───── labels
-      │        └───── test/
-      │        │        ├───── fault/    # test results in here
-      │        │        │         
-      │        │        │         
-      │        │        └───── seismic/  # test data put here
+      │ 
       │ 
       └───── ...
 ```

@@ -25,7 +25,7 @@ fault_detection/
 conda env create -f environment.yml
 ```
 ## Downloading the Data
-https://pan.baidu.com/s/1YWwvEJj3I4asfOGK_RqBeg?pwd=o65d
+https://pan.baidu.com/s/1Ga2MNm812T-wcb07j34f8w?pwd=xoqi
 ## Loading the Data
 ```commandline
 python process.py

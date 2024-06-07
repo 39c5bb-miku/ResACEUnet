@@ -1,4 +1,6 @@
 # ResACEUnet
+[![DOI](https://zenodo.org/badge/782789753.svg)](https://zenodo.org/doi/10.5281/zenodo.11516291)
+
 <div align=center>
     <img src="ResACEUnet.png" width=100% />
 </div>

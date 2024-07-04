@@ -40,7 +40,7 @@ Download the training datasets [https://pan.baidu.com/s/1Ga2MNm812T-wcb07j34f8w?
 
 In main.py, set the GPU number to be used on line 3.
 
-Hyperparameters are set in configs/configs.yaml, which you can modify as needed.
+Hyperparameters are set in configs/config.yaml, which you can modify as needed.
 
 ```commandline
 python main.py

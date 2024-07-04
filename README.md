@@ -36,7 +36,7 @@ pip install torch==1.12.0+cu113 torchvision==0.13.0+cu113 torchaudio==0.12.0 --e
 pip install timm tqdm wandb monai yacs matplotlib seismic_canvas segyio omegaconf scikit-image scikit-learn matplotlib numpy pandas scipy termcolor obispy
 ```
 ## Training
-Download the training datasets https://pan.baidu.com/s/1Ga2MNm812T-wcb07j34f8w?pwd=xoqi and place the extracted files in the `datasets`.
+Download the training datasets [https://pan.baidu.com/s/1Ga2MNm812T-wcb07j34f8w?pwd=xoqi](https://pan.baidu.com/s/1NjiM6KwRKfMPJJ2wDDGTqA?pwd=x0b0) and place the extracted files in the `datasets`.
 
 In main.py, set the GPU number to be used on line 3.
 

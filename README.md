@@ -37,21 +37,29 @@ pip install timm tqdm wandb monai yacs matplotlib seismic_canvas segyio omegacon
 ```
 ## Training
 Download the training datasets https://pan.baidu.com/s/1Ga2MNm812T-wcb07j34f8w?pwd=xoqi and place the extracted files in the datasets folder.
+
 In main.py, set the GPU number to be used on line 3.
+
 Hyperparameters are set in configs/configs.yaml, which you can modify as needed.
+
 ```commandline
 python main.py
 ```
 ## Testing
 Place the data for prediction (in npy format) in the datasets/test/seismic folder.
+
 The results of the prediction will be saved in the datasets/test/fault folder.
+
 ```commandline
 python predict_3d.py
 ```
 ## Visualization
 The seismic3D function in utils/casual.py can be used to view 3D seismic images, and the fault3D function can be used to view 3D seismic fault images. Modify seismic_path and fault_path as needed.
+
 utils/show_results.py can be used to view 3D seismic sections or slices and save them as jpg files. Modify type to represent which dimension of the data, num to represent which face, and file to represent the data name as needed.
+
 utils/sgy_npy.py can convert npy files to sgy files. Modify predicted_file as needed.
+
 utils/readsgy.ipynb can read sgy data and convert it to npy data.
 ## Tip
 If an error occurs with NaN, it might be due to model initialization issues. Try running the process again or modify the seed and run again.

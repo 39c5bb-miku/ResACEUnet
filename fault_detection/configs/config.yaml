@@ -1,0 +1,59 @@
+data:
+  batch_size: 4
+  img_size: 128
+  pin_memory: True
+  num_workers: 4
+  path: 'datasets/200-20/'
+  json_path: 'datasets'
+  json_name: 'dataset.json'
+
+model:
+  name: 'UNET'
+  in_chans: 1
+  num_classes: 1
+  ds: False
+  drop: 0.1
+  attn_drop: 0.1
+  drop_path: 0.1
+  resume: ''
+
+train:
+  amp: False
+  start_epoch: 0
+  epochs: 200
+  clip_grad: False
+  auto_resume: True
+  patience: 200
+  output: 'output'
+  save_freq: 100
+  print_freq: 10
+  seed: 20240629
+
+lr_scheduler:
+  name: 'cosine'
+  decay_rate: 0.1
+  decay_epochs: 30
+  warmup_epochs: 10
+  warmup_lr: 1e-5
+  min_lr: 1e-7
+
+optimizer:
+  name: 'adamw'
+  betas: [0.9, 0.999]
+  eps: 1e-8
+  momentum: 0.9
+  lr: 1e-3
+  weight_decay: 1e-4
+
+loss:
+  name: 'ce_dice_loss'
+  dice_weight: 0.5
+  ce_weight: 0.5
+
+aug:
+  mixup: True
+  lambdaa: 0.1
+
+wandb: False
+
+gpu_num: s

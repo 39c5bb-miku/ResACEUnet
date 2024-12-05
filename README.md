@@ -1,5 +1,5 @@
 # ResACEUnet
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12683100.svg)](https://doi.org/10.5281/zenodo.12683100)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14280741.svg)](https://doi.org/10.5281/zenodo.14280741)
 
 <div align=center>
     <img src="ResACEUnet.png" width=100% />

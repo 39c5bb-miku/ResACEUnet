@@ -1,7 +1,3 @@
-import torch
-import torch.nn as nn
-from torch.nn import functional as F
-
 class AverageMeter:
 	"""Computes and stores the average and current value"""
 

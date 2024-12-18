@@ -1,3 +1,5 @@
+import os
+from tqdm import tqdm
 import numpy as np
 import segyio
 
@@ -7,7 +9,7 @@ def read_inregular_seisdata(file,total_trace=None):
 	MAXINLINE = 0
 	MININLINE = 1000000
 	with segyio.open(file, strict=True,ignore_geometry=True) as src:
-		for trace_index in range(src.tracecount):
+		for trace_index in tqdm(range(src.tracecount)):
 			trace_header = src.header[trace_index]
 			INLINE_3D = trace_header[segyio.TraceField.INLINE_3D]
 			if INLINE_3D==0:
@@ -22,7 +24,7 @@ def read_inregular_seisdata(file,total_trace=None):
 		data = np.asarray([np.copy(x) for x in src.trace[:]])
 		n1, n2 = data.shape
 		total=np.zeros((MAXINLINE-MININLINE+1,MAXCDP-MINCDP+1,n2),dtype=np.float32)
-		for trace_index in range(n1):
+		for trace_index in tqdm(range(n1)):
 			trace_header = src.header[trace_index]
 			INLINE_3D = trace_header[segyio.TraceField.INLINE_3D]
 			if INLINE_3D==0:
@@ -51,7 +53,7 @@ def create_segyfile_by_npy(begin_inline,begin_crossline,begin_time,
 	end_crossline = begin_crossline + n2 - 1
 	end_time = begin_time + time_interval * (n3 - 1)
 	totaltrace=(end_inline-begin_inline+1)*(end_crossline-begin_crossline+1)
-	data = data.reshape(totaltrace,n1//totaltrace)
+	data = data.reshape(totaltrace,n3)
 	spec=segyio.spec()
 	spec.iline = inline
 	spec.xline = crossline
@@ -61,7 +63,7 @@ def create_segyfile_by_npy(begin_inline,begin_crossline,begin_time,
 	spec.sorting = 2
 	spec.format = 1
 	with segyio.create(prefix+'.sgy', spec) as dst:
-		for trace_index in range(dst.tracecount):
+		for trace_index in tqdm(range(dst.tracecount)):
 			dst.header[trace_index][segyio.TraceField.TRACE_SEQUENCE_LINE]=trace_index+1
 			dst.header[trace_index][segyio.TraceField.INLINE_3D]=(trace_index)//int((end_crossline-begin_crossline)//inc_crossline+1)*inc_inline + begin_inline
 			dst.header[trace_index][segyio.TraceField.CROSSLINE_3D]=(trace_index)%int((end_crossline-begin_crossline)//inc_crossline+1)*inc_crossline + begin_crossline
@@ -98,7 +100,7 @@ def create_segyfile_by_bin(begin_inline,end_inline,begin_crossline,end_crossline
 	spec.sorting = 2
 	spec.format = 1
 	with segyio.create(prefix+'.sgy', spec) as dst:
-		for trace_index in range(dst.tracecount):
+		for trace_index in tqdm(range(dst.tracecount)):
 			dst.header[trace_index][segyio.TraceField.TRACE_SEQUENCE_LINE]=trace_index+1
 			dst.header[trace_index][segyio.TraceField.INLINE_3D]=(trace_index)//int((end_crossline-begin_crossline)//inc_crossline+1)*inc_inline + begin_inline
 			dst.header[trace_index][segyio.TraceField.CROSSLINE_3D]=(trace_index)%int((end_crossline-begin_crossline)//inc_crossline+1)*inc_crossline + begin_crossline
@@ -122,7 +124,7 @@ def save_inregular_seisdata(temp,input_folder,output_folder,file,fix='ai'):
 	MAXINLINE = 0
 	MININLINE = 1000000
 	with segyio.open(input_folder + '/' + filename + '.' + subfix, strict=True, ignore_geometry=True) as src:
-		for trace_index in range(src.tracecount):
+		for trace_index in tqdm(range(src.tracecount)):
 			trace_header = src.header[trace_index]
 			INLINE_3D = trace_header[segyio.TraceField.INLINE_3D]
 			if INLINE_3D==0:
@@ -135,7 +137,7 @@ def save_inregular_seisdata(temp,input_folder,output_folder,file,fix='ai'):
 			MININLINE=min(MININLINE,INLINE_3D)
 			MINCDP = min(MINCDP, CDP)
 		data=np.zeros((n1*n2,n3),dtype=np.float32)
-		for trace_index in range(src.tracecount):
+		for trace_index in tqdm(range(src.tracecount)):
 			trace_header = src.header[trace_index]
 			INLINE_3D = trace_header[segyio.TraceField.INLINE_3D]
 			if INLINE_3D == 0:
@@ -153,10 +155,19 @@ def save_inregular_seisdata(temp,input_folder,output_folder,file,fix='ai'):
 			dst.trace = data
 		dst.close()
 
+def dat_npy(dat_file,npy_file,shape=(128,128,128)):
+    with open(dat_file, 'r') as f:
+        data = np.fromfile(f, dtype=np.float32)
+        data = data.reshape(shape)
+
+    np.save(npy_file, data)
+
 if __name__ == '__main__':
-	input_folder=''
-	output_folder=''
-	file=''
-	predictd_file=''
-	results=np.load(predictd_file)
-	save_inregular_seisdata(results,input_folder,output_folder,file,fix='ai')
+	output_folder=r'F:\下载\The_benchmark_skeletonization_datasets\parallel_class\1.dat'
+	input_folder=r'1.npy'
+	sgy=r'RTM_P_T_32f_S2_4100-6000.sgy'
+	npy=r'datasets\test\seismic\Parihaka1.npy'
+	# results = np.load(os.path.join(output_folder,npy))
+	# save_inregular_seisdata(results,input_folder,output_folder,sgy,fix='ai')
+	create_segyfile_by_npy(1,1,0,1,npy)
+	# dat_npy(output_folder,input_folder,shape=(128,128))

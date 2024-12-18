@@ -2,15 +2,13 @@ import torch
 import torch.nn as nn
 
 class DoubleConv(nn.Module):
-    def __init__(self, in_channels, out_channels, mid_channels=None):
+    def __init__(self, in_channels, out_channels):
         super().__init__()
-        if not mid_channels:
-            mid_channels = out_channels
         self.double_conv = nn.Sequential(
-            nn.Conv3d(in_channels, mid_channels, kernel_size=3, padding=1),
-            nn.BatchNorm3d(mid_channels),
+            nn.Conv3d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm3d(out_channels),
             nn.ReLU(inplace=False),
-            nn.Conv3d(mid_channels, out_channels, kernel_size=3, padding=1),
+            nn.Conv3d(out_channels, out_channels, kernel_size=3, padding=1),
             nn.BatchNorm3d(out_channels),
             nn.ReLU(inplace=False)
         )
@@ -34,7 +32,6 @@ class Down(nn.Module):
 class Up(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
-
         self.up = nn.Upsample(scale_factor=(2, 2, 2), mode='trilinear', align_corners=True)
         self.conv = DoubleConv(in_channels, out_channels)
 
@@ -59,9 +56,9 @@ class OutConv(nn.Module):
         return self.conv(x)
 
 
-class Unet(nn.Module):
+class UNet3(nn.Module):
     def __init__(self, n_channels, n_classes):
-        super(Unet, self).__init__()
+        super().__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
 
@@ -74,7 +71,6 @@ class Unet(nn.Module):
         self.up3 = Up(96, 32)
         self.up4 = Up(48, 16)
         self.out = OutConv(16, n_classes)
-        self.outact = nn.Sigmoid()
 
     def forward(self, x):
         x1 = self.inc(x)
@@ -86,6 +82,5 @@ class Unet(nn.Module):
         x = self.up3(x, x2)
         x = self.up4(x, x1)
         logits = self.out(x)
-        outputs = self.outact(logits)
 
-        return outputs
+        return logits

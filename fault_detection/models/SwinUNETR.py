@@ -9,7 +9,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Sequence, Tuple, Type, Union
+from __future__ import annotations
+
+import itertools
+from collections.abc import Sequence
 
 import numpy as np
 import torch
@@ -17,41 +20,70 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 from torch.nn import LayerNorm
+from typing_extensions import Final
 
 from monai.networks.blocks import MLPBlock as Mlp
 from monai.networks.blocks import PatchEmbed, UnetOutBlock, UnetrBasicBlock, UnetrUpBlock
 from monai.networks.layers import DropPath, trunc_normal_
-from monai.utils import ensure_tuple_rep, optional_import
+from monai.utils import ensure_tuple_rep, look_up_option, optional_import
+from monai.utils.deprecate_utils import deprecated_arg
 
 rearrange, _ = optional_import("einops", name="rearrange")
 
+__all__ = [
+    "SwinUNETR",
+    "window_partition",
+    "window_reverse",
+    "WindowAttention",
+    "SwinTransformerBlock",
+    "PatchMerging",
+    "PatchMergingV2",
+    "MERGING_MODE",
+    "BasicLayer",
+    "SwinTransformer",
+]
 
-class Swin_UnetR(nn.Module):
+
+class SwinUNETR(nn.Module):
     """
     Swin UNETR based on: "Hatamizadeh et al.,
     Swin UNETR: Swin Transformers for Semantic Segmentation of Brain Tumors in MRI Images
     <https://arxiv.org/abs/2201.01266>"
     """
 
+    patch_size: Final[int] = 2
+
+    @deprecated_arg(
+        name="img_size",
+        since="1.3",
+        removed="1.5",
+        msg_suffix="The img_size argument is not required anymore and "
+        "checks on the input size are run during forward().",
+    )
     def __init__(
         self,
-        img_size: Union[Sequence[int], int],
+        img_size: Sequence[int] | int,
         in_channels: int,
         out_channels: int,
         depths: Sequence[int] = (2, 2, 2, 2),
         num_heads: Sequence[int] = (3, 6, 12, 24),
         feature_size: int = 24,
-        norm_name: Union[Tuple, str] = "instance",
+        norm_name: tuple | str = "instance",
         drop_rate: float = 0.0,
         attn_drop_rate: float = 0.0,
         dropout_path_rate: float = 0.0,
         normalize: bool = True,
         use_checkpoint: bool = False,
         spatial_dims: int = 3,
+        downsample="merging",
+        use_v2=False,
     ) -> None:
         """
         Args:
-            img_size: dimension of input image.
+            img_size: spatial dimension of input image.
+                This argument is only used for checking that the input image size is divisible by the patch size.
+                The tensor passed to forward() can have a dynamic shape as long as its spatial dimensions are divisible by 2**5.
+                It will be removed in an upcoming version.
             in_channels: dimension of input channels.
             out_channels: dimension of output channels.
             feature_size: dimension of network feature size.
@@ -64,6 +96,10 @@ class Swin_UnetR(nn.Module):
             normalize: normalize output intermediate features in each stage.
             use_checkpoint: use gradient checkpointing for reduced memory usage.
             spatial_dims: number of spatial dims.
+            downsample: module used for downsampling, available options are `"mergingv2"`, `"merging"` and a
+                user-specified `nn.Module` following the API defined in :py:class:`monai.networks.nets.PatchMerging`.
+                The default is currently `"merging"` (the original version defined in v0.9.0).
+            use_v2: using swinunetr_v2, which adds a residual convolution block at the beggining of each swin stage.
 
         Examples::
 
@@ -81,16 +117,13 @@ class Swin_UnetR(nn.Module):
         super().__init__()
 
         img_size = ensure_tuple_rep(img_size, spatial_dims)
-        patch_size = ensure_tuple_rep(2, spatial_dims)
+        patch_sizes = ensure_tuple_rep(self.patch_size, spatial_dims)
         window_size = ensure_tuple_rep(7, spatial_dims)
 
-        if not (spatial_dims == 2 or spatial_dims == 3):
+        if spatial_dims not in (2, 3):
             raise ValueError("spatial dimension should be 2 or 3.")
 
-        for m, p in zip(img_size, patch_size):
-            for i in range(5):
-                if m % np.power(p, i + 1) != 0:
-                    raise ValueError("input image size (img_size) should be divisible by stage-wise image resolution.")
+        self._check_input_size(img_size)
 
         if not (0 <= drop_rate <= 1):
             raise ValueError("dropout rate should be between 0 and 1.")
@@ -110,7 +143,7 @@ class Swin_UnetR(nn.Module):
             in_chans=in_channels,
             embed_dim=feature_size,
             window_size=window_size,
-            patch_size=patch_size,
+            patch_size=patch_sizes,
             depths=depths,
             num_heads=num_heads,
             mlp_ratio=4.0,
@@ -121,7 +154,10 @@ class Swin_UnetR(nn.Module):
             norm_layer=nn.LayerNorm,
             use_checkpoint=use_checkpoint,
             spatial_dims=spatial_dims,
+            downsample=look_up_option(downsample, MERGING_MODE) if isinstance(downsample, str) else downsample,
+            use_v2=use_v2,
         )
+
         self.encoder1 = UnetrBasicBlock(
             spatial_dims=spatial_dims,
             in_channels=in_channels,
@@ -131,6 +167,7 @@ class Swin_UnetR(nn.Module):
             norm_name=norm_name,
             res_block=True,
         )
+
         self.encoder2 = UnetrBasicBlock(
             spatial_dims=spatial_dims,
             in_channels=feature_size,
@@ -140,6 +177,7 @@ class Swin_UnetR(nn.Module):
             norm_name=norm_name,
             res_block=True,
         )
+
         self.encoder3 = UnetrBasicBlock(
             spatial_dims=spatial_dims,
             in_channels=2 * feature_size,
@@ -149,6 +187,7 @@ class Swin_UnetR(nn.Module):
             norm_name=norm_name,
             res_block=True,
         )
+
         self.encoder4 = UnetrBasicBlock(
             spatial_dims=spatial_dims,
             in_channels=4 * feature_size,
@@ -158,6 +197,7 @@ class Swin_UnetR(nn.Module):
             norm_name=norm_name,
             res_block=True,
         )
+
         self.encoder10 = UnetrBasicBlock(
             spatial_dims=spatial_dims,
             in_channels=16 * feature_size,
@@ -167,6 +207,7 @@ class Swin_UnetR(nn.Module):
             norm_name=norm_name,
             res_block=True,
         )
+
         self.decoder5 = UnetrUpBlock(
             spatial_dims=spatial_dims,
             in_channels=16 * feature_size,
@@ -176,6 +217,7 @@ class Swin_UnetR(nn.Module):
             norm_name=norm_name,
             res_block=True,
         )
+
         self.decoder4 = UnetrUpBlock(
             spatial_dims=spatial_dims,
             in_channels=feature_size * 8,
@@ -185,6 +227,7 @@ class Swin_UnetR(nn.Module):
             norm_name=norm_name,
             res_block=True,
         )
+
         self.decoder3 = UnetrUpBlock(
             spatial_dims=spatial_dims,
             in_channels=feature_size * 4,
@@ -203,6 +246,7 @@ class Swin_UnetR(nn.Module):
             norm_name=norm_name,
             res_block=True,
         )
+
         self.decoder1 = UnetrUpBlock(
             spatial_dims=spatial_dims,
             in_channels=feature_size,
@@ -212,13 +256,10 @@ class Swin_UnetR(nn.Module):
             norm_name=norm_name,
             res_block=True,
         )
-        self.out = UnetOutBlock(
-            spatial_dims=spatial_dims, in_channels=feature_size, out_channels=out_channels
-        )  # type: ignore
-        self.outact = nn.Sigmoid()
+
+        self.out = UnetOutBlock(spatial_dims=spatial_dims, in_channels=feature_size, out_channels=out_channels)
 
     def load_from(self, weights):
-
         with torch.no_grad():
             self.swinViT.patch_embed.proj.weight.copy_(weights["state_dict"]["module.patch_embed.proj.weight"])
             self.swinViT.patch_embed.proj.bias.copy_(weights["state_dict"]["module.patch_embed.proj.bias"])
@@ -267,7 +308,20 @@ class Swin_UnetR(nn.Module):
                 weights["state_dict"]["module.layers4.0.downsample.norm.bias"]
             )
 
+    @torch.jit.unused
+    def _check_input_size(self, spatial_shape):
+        img_size = np.array(spatial_shape)
+        remainder = (img_size % np.power(self.patch_size, 5)) > 0
+        if remainder.any():
+            wrong_dims = (np.where(remainder)[0] + 2).tolist()
+            raise ValueError(
+                f"spatial dimensions {wrong_dims} of input image (spatial shape: {spatial_shape})"
+                f" must be divisible by {self.patch_size}**5."
+            )
+
     def forward(self, x_in):
+        if not torch.jit.is_scripting():
+            self._check_input_size(x_in.shape[2:])
         hidden_states_out = self.swinViT(x_in, self.normalize)
         enc0 = self.encoder1(x_in)
         enc1 = self.encoder2(hidden_states_out[0])
@@ -280,9 +334,7 @@ class Swin_UnetR(nn.Module):
         dec0 = self.decoder2(dec1, enc1)
         out = self.decoder1(dec0, enc0)
         logits = self.out(out)
-        out = self.outact(logits)
-
-        return out
+        return logits
 
 
 def window_partition(x, window_size):
@@ -345,7 +397,7 @@ def window_reverse(windows, window_size, dims):
 
     elif len(dims) == 3:
         b, h, w = dims
-        x = windows.view(b, h // window_size[0], w // window_size[0], window_size[0], window_size[1], -1)
+        x = windows.view(b, h // window_size[0], w // window_size[1], window_size[0], window_size[1], -1)
         x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(b, h, w, -1)
     return x
 
@@ -479,7 +531,7 @@ class WindowAttention(nn.Module):
         else:
             attn = self.softmax(attn)
 
-        attn = self.attn_drop(attn)
+        attn = self.attn_drop(attn).to(v.dtype)
         x = (attn @ v).transpose(1, 2).reshape(b, n, c)
         x = self.proj(x)
         x = self.proj_drop(x)
@@ -506,7 +558,7 @@ class SwinTransformerBlock(nn.Module):
         attn_drop: float = 0.0,
         drop_path: float = 0.0,
         act_layer: str = "GELU",
-        norm_layer: Type[LayerNorm] = nn.LayerNorm,  # type: ignore
+        norm_layer: type[LayerNorm] = nn.LayerNorm,
         use_checkpoint: bool = False,
     ) -> None:
         """
@@ -565,8 +617,8 @@ class SwinTransformerBlock(nn.Module):
             b, h, w, c = x.shape
             window_size, shift_size = get_window_size((h, w), self.window_size, self.shift_size)
             pad_l = pad_t = 0
-            pad_r = (window_size[0] - h % window_size[0]) % window_size[0]
-            pad_b = (window_size[1] - w % window_size[1]) % window_size[1]
+            pad_b = (window_size[0] - h % window_size[0]) % window_size[0]
+            pad_r = (window_size[1] - w % window_size[1]) % window_size[1]
             x = F.pad(x, (0, 0, pad_l, pad_r, pad_t, pad_b))
             _, hp, wp, _ = x.shape
             dims = [b, hp, wp]
@@ -641,18 +693,18 @@ class SwinTransformerBlock(nn.Module):
     def forward(self, x, mask_matrix):
         shortcut = x
         if self.use_checkpoint:
-            x = checkpoint.checkpoint(self.forward_part1, x, mask_matrix)
+            x = checkpoint.checkpoint(self.forward_part1, x, mask_matrix, use_reentrant=False)
         else:
             x = self.forward_part1(x, mask_matrix)
         x = shortcut + self.drop_path(x)
         if self.use_checkpoint:
-            x = x + checkpoint.checkpoint(self.forward_part2, x)
+            x = x + checkpoint.checkpoint(self.forward_part2, x, use_reentrant=False)
         else:
             x = x + self.forward_part2(x)
         return x
 
 
-class PatchMerging(nn.Module):
+class PatchMergingV2(nn.Module):
     """
     Patch merging layer based on: "Liu et al.,
     Swin Transformer: Hierarchical Vision Transformer using Shifted Windows
@@ -660,9 +712,7 @@ class PatchMerging(nn.Module):
     https://github.com/microsoft/Swin-Transformer
     """
 
-    def __init__(
-        self, dim: int, norm_layer: Type[LayerNorm] = nn.LayerNorm, spatial_dims: int = 3
-    ) -> None:  # type: ignore
+    def __init__(self, dim: int, norm_layer: type[LayerNorm] = nn.LayerNorm, spatial_dims: int = 3) -> None:
         """
         Args:
             dim: number of feature channels.
@@ -680,37 +730,56 @@ class PatchMerging(nn.Module):
             self.norm = norm_layer(4 * dim)
 
     def forward(self, x):
-
         x_shape = x.size()
         if len(x_shape) == 5:
             b, d, h, w, c = x_shape
             pad_input = (h % 2 == 1) or (w % 2 == 1) or (d % 2 == 1)
             if pad_input:
-                x = F.pad(x, (0, 0, 0, d % 2, 0, w % 2, 0, h % 2))
-            x0 = x[:, 0::2, 0::2, 0::2, :]
-            x1 = x[:, 1::2, 0::2, 0::2, :]
-            x2 = x[:, 0::2, 1::2, 0::2, :]
-            x3 = x[:, 0::2, 0::2, 1::2, :]
-            x4 = x[:, 1::2, 0::2, 1::2, :]
-            x5 = x[:, 0::2, 1::2, 0::2, :]
-            x6 = x[:, 0::2, 0::2, 1::2, :]
-            x7 = x[:, 1::2, 1::2, 1::2, :]
-            x = torch.cat([x0, x1, x2, x3, x4, x5, x6, x7], -1)
+                x = F.pad(x, (0, 0, 0, w % 2, 0, h % 2, 0, d % 2))
+            x = torch.cat(
+                [x[:, i::2, j::2, k::2, :] for i, j, k in itertools.product(range(2), range(2), range(2))], -1
+            )
 
         elif len(x_shape) == 4:
             b, h, w, c = x_shape
             pad_input = (h % 2 == 1) or (w % 2 == 1)
             if pad_input:
                 x = F.pad(x, (0, 0, 0, w % 2, 0, h % 2))
-            x0 = x[:, 0::2, 0::2, :]
-            x1 = x[:, 1::2, 0::2, :]
-            x2 = x[:, 0::2, 1::2, :]
-            x3 = x[:, 1::2, 1::2, :]
-            x = torch.cat([x0, x1, x2, x3], -1)
+            x = torch.cat([x[:, j::2, i::2, :] for i, j in itertools.product(range(2), range(2))], -1)
 
         x = self.norm(x)
         x = self.reduction(x)
         return x
+
+
+class PatchMerging(PatchMergingV2):
+    """The `PatchMerging` module previously defined in v0.9.0."""
+
+    def forward(self, x):
+        x_shape = x.size()
+        if len(x_shape) == 4:
+            return super().forward(x)
+        if len(x_shape) != 5:
+            raise ValueError(f"expecting 5D x, got {x.shape}.")
+        b, d, h, w, c = x_shape
+        pad_input = (h % 2 == 1) or (w % 2 == 1) or (d % 2 == 1)
+        if pad_input:
+            x = F.pad(x, (0, 0, 0, w % 2, 0, h % 2, 0, d % 2))
+        x0 = x[:, 0::2, 0::2, 0::2, :]
+        x1 = x[:, 1::2, 0::2, 0::2, :]
+        x2 = x[:, 0::2, 1::2, 0::2, :]
+        x3 = x[:, 0::2, 0::2, 1::2, :]
+        x4 = x[:, 1::2, 0::2, 1::2, :]
+        x5 = x[:, 0::2, 1::2, 0::2, :]
+        x6 = x[:, 0::2, 0::2, 1::2, :]
+        x7 = x[:, 1::2, 1::2, 1::2, :]
+        x = torch.cat([x0, x1, x2, x3, x4, x5, x6, x7], -1)
+        x = self.norm(x)
+        x = self.reduction(x)
+        return x
+
+
+MERGING_MODE = {"merging": PatchMerging, "mergingv2": PatchMergingV2}
 
 
 def compute_mask(dims, window_size, shift_size, device):
@@ -772,14 +841,14 @@ class BasicLayer(nn.Module):
         qkv_bias: bool = False,
         drop: float = 0.0,
         attn_drop: float = 0.0,
-        norm_layer: Type[LayerNorm] = nn.LayerNorm,  # type: ignore
-        downsample: isinstance = None,  # type: ignore
+        norm_layer: type[LayerNorm] = nn.LayerNorm,
+        downsample: nn.Module | None = None,
         use_checkpoint: bool = False,
     ) -> None:
         """
         Args:
             dim: number of feature channels.
-            depths: number of layers in each stage.
+            depth: number of layers in each stage.
             num_heads: number of attention heads.
             window_size: local window size.
             drop_path: stochastic depth rate.
@@ -788,7 +857,7 @@ class BasicLayer(nn.Module):
             drop: dropout rate.
             attn_drop: attention dropout rate.
             norm_layer: normalization layer.
-            downsample: downsample layer at the end of the layer.
+            downsample: an optional downsampling layer at the end of the layer.
             use_checkpoint: use gradient checkpointing for reduced memory usage.
         """
 
@@ -817,7 +886,7 @@ class BasicLayer(nn.Module):
             ]
         )
         self.downsample = downsample
-        if self.downsample is not None:
+        if callable(self.downsample):
             self.downsample = downsample(dim=dim, norm_layer=norm_layer, spatial_dims=len(self.window_size))
 
     def forward(self, x):
@@ -874,10 +943,12 @@ class SwinTransformer(nn.Module):
         drop_rate: float = 0.0,
         attn_drop_rate: float = 0.0,
         drop_path_rate: float = 0.0,
-        norm_layer: Type[LayerNorm] = nn.LayerNorm,  # type: ignore
+        norm_layer: type[LayerNorm] = nn.LayerNorm,
         patch_norm: bool = False,
         use_checkpoint: bool = False,
         spatial_dims: int = 3,
+        downsample="merging",
+        use_v2=False,
     ) -> None:
         """
         Args:
@@ -896,6 +967,10 @@ class SwinTransformer(nn.Module):
             patch_norm: add normalization after patch embedding.
             use_checkpoint: use gradient checkpointing for reduced memory usage.
             spatial_dims: spatial dimension.
+            downsample: module used for downsampling, available options are `"mergingv2"`, `"merging"` and a
+                user-specified `nn.Module` following the API defined in :py:class:`monai.networks.nets.PatchMerging`.
+                The default is currently `"merging"` (the original version defined in v0.9.0).
+            use_v2: using swinunetr_v2, which adds a residual convolution block at the beginning of each swin stage.
         """
 
         super().__init__()
@@ -913,10 +988,17 @@ class SwinTransformer(nn.Module):
         )
         self.pos_drop = nn.Dropout(p=drop_rate)
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
+        self.use_v2 = use_v2
         self.layers1 = nn.ModuleList()
         self.layers2 = nn.ModuleList()
         self.layers3 = nn.ModuleList()
         self.layers4 = nn.ModuleList()
+        if self.use_v2:
+            self.layers1c = nn.ModuleList()
+            self.layers2c = nn.ModuleList()
+            self.layers3c = nn.ModuleList()
+            self.layers4c = nn.ModuleList()
+        down_sample_mod = look_up_option(downsample, MERGING_MODE) if isinstance(downsample, str) else downsample
         for i_layer in range(self.num_layers):
             layer = BasicLayer(
                 dim=int(embed_dim * 2**i_layer),
@@ -929,7 +1011,7 @@ class SwinTransformer(nn.Module):
                 drop=drop_rate,
                 attn_drop=attn_drop_rate,
                 norm_layer=norm_layer,
-                downsample=PatchMerging,
+                downsample=down_sample_mod,
                 use_checkpoint=use_checkpoint,
             )
             if i_layer == 0:
@@ -940,6 +1022,25 @@ class SwinTransformer(nn.Module):
                 self.layers3.append(layer)
             elif i_layer == 3:
                 self.layers4.append(layer)
+            if self.use_v2:
+                layerc = UnetrBasicBlock(
+                    spatial_dims=spatial_dims,
+                    in_channels=embed_dim * 2**i_layer,
+                    out_channels=embed_dim * 2**i_layer,
+                    kernel_size=3,
+                    stride=1,
+                    norm_name="instance",
+                    res_block=True,
+                )
+                if i_layer == 0:
+                    self.layers1c.append(layerc)
+                elif i_layer == 1:
+                    self.layers2c.append(layerc)
+                elif i_layer == 2:
+                    self.layers3c.append(layerc)
+                elif i_layer == 3:
+                    self.layers4c.append(layerc)
+
         self.num_features = int(embed_dim * 2 ** (self.num_layers - 1))
 
     def proj_out(self, x, normalize=False):
@@ -961,25 +1062,69 @@ class SwinTransformer(nn.Module):
         x0 = self.patch_embed(x)
         x0 = self.pos_drop(x0)
         x0_out = self.proj_out(x0, normalize)
+        if self.use_v2:
+            x0 = self.layers1c[0](x0.contiguous())
         x1 = self.layers1[0](x0.contiguous())
         x1_out = self.proj_out(x1, normalize)
+        if self.use_v2:
+            x1 = self.layers2c[0](x1.contiguous())
         x2 = self.layers2[0](x1.contiguous())
         x2_out = self.proj_out(x2, normalize)
+        if self.use_v2:
+            x2 = self.layers3c[0](x2.contiguous())
         x3 = self.layers3[0](x2.contiguous())
         x3_out = self.proj_out(x3, normalize)
+        if self.use_v2:
+            x3 = self.layers4c[0](x3.contiguous())
         x4 = self.layers4[0](x3.contiguous())
         x4_out = self.proj_out(x4, normalize)
         return [x0_out, x1_out, x2_out, x3_out, x4_out]
 
-if __name__ == '__main__':
-    input = torch.rand(1, 1, 64, 64, 64)
-    model = Swin_UnetR(img_size=64,
-                in_channels=1,
-                out_channels=1, 
-                depths=[2, 2, 2, 2],
-                feature_size=48
-    )
-    # for param_tensor in model.state_dict():
-    #     print(param_tensor, "\t", model.state_dict()[param_tensor].size())
-    output = model(input)
-    print(output.shape)  
+
+def filter_swinunetr(key, value):
+    """
+    A filter function used to filter the pretrained weights from [1], then the weights can be loaded into MONAI SwinUNETR Model.
+    This function is typically used with `monai.networks.copy_model_state`
+    [1] "Valanarasu JM et al., Disruptive Autoencoders: Leveraging Low-level features for 3D Medical Image Pre-training
+    <https://arxiv.org/abs/2307.16896>"
+
+    Args:
+        key: the key in the source state dict used for the update.
+        value: the value in the source state dict used for the update.
+
+    Examples::
+
+        import torch
+        from monai.apps import download_url
+        from monai.networks.utils import copy_model_state
+        from monai.networks.nets.swin_unetr import SwinUNETR, filter_swinunetr
+
+        model = SwinUNETR(img_size=(96, 96, 96), in_channels=1, out_channels=3, feature_size=48)
+        resource = (
+            "https://github.com/Project-MONAI/MONAI-extra-test-data/releases/download/0.8.1/ssl_pretrained_weights.pth"
+        )
+        ssl_weights_path = "./ssl_pretrained_weights.pth"
+        download_url(resource, ssl_weights_path)
+        ssl_weights = torch.load(ssl_weights_path)["model"]
+
+        dst_dict, loaded, not_loaded = copy_model_state(model, ssl_weights, filter_func=filter_swinunetr)
+
+    """
+    if key in [
+        "encoder.mask_token",
+        "encoder.norm.weight",
+        "encoder.norm.bias",
+        "out.conv.conv.weight",
+        "out.conv.conv.bias",
+    ]:
+        return None
+
+    if key[:8] == "encoder.":
+        if key[8:19] == "patch_embed":
+            new_key = "swinViT." + key[8:]
+        else:
+            new_key = "swinViT." + key[8:18] + key[20:]
+
+        return new_key, value
+    else:
+        return None

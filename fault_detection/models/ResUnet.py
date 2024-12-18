@@ -1,41 +1,24 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-
-class DoubleConv(nn.Module):
-    def __init__(self, in_channels, out_channels, mid_channels=None):
+class ResConv(nn.Module):
+    def __init__(self, in_channels, out_channels):
         super().__init__()
-        if not mid_channels:
-            mid_channels = out_channels
-        self.double_conv = nn.Sequential(
-            nn.Conv3d(in_channels, mid_channels, kernel_size=3, padding=1),
-            nn.BatchNorm3d(mid_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv3d(mid_channels, out_channels, kernel_size=3, padding=1),
-            nn.BatchNorm3d(out_channels),
-            nn.ReLU(inplace=True)
-        )
+        self.conv1 = nn.Conv3d(in_channels, out_channels, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm3d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv3d(out_channels, out_channels, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm3d(out_channels)
 
     def forward(self, x):
-        return self.double_conv(x)
-
-
-class ResBlock(nn.Module):
-    def __init__(self, n_channels, mid_channels=None):
-        super(ResBlock, self).__init__()
-        if not mid_channels:
-            mid_channels = n_channels
-        self.res_block = nn.Sequential(
-            nn.Conv3d(n_channels, mid_channels, kernel_size=3, padding=1),
-            nn.BatchNorm3d(mid_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv3d(mid_channels, n_channels, kernel_size=3, padding=1),
-            nn.BatchNorm3d(n_channels)
-        )
-
-    def forward(self, x):
-        return x + self.res_block(x)
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        residual = x
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = self.relu(x)
+        return residual + x
 
 
 class Down(nn.Module):
@@ -43,8 +26,7 @@ class Down(nn.Module):
         super().__init__()
         self.maxpool_conv = nn.Sequential(
             nn.MaxPool3d(2),
-            DoubleConv(in_channels, out_channels),
-            ResBlock(out_channels)
+            ResConv(in_channels, out_channels),
         )
 
     def forward(self, x):
@@ -54,10 +36,8 @@ class Down(nn.Module):
 class Up(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
-
         self.up = nn.Upsample(scale_factor=(2, 2, 2), mode='trilinear', align_corners=True)
-        self.conv = DoubleConv(in_channels, out_channels)
-        self.res = ResBlock(out_channels)
+        self.conv = ResConv(in_channels, out_channels)
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
@@ -80,22 +60,21 @@ class OutConv(nn.Module):
         return self.conv(x)
 
 
-class ResUnet(nn.Module):
+class ResUNet(nn.Module):
     def __init__(self, n_channels, n_classes):
-        super(ResUnet, self).__init__()
+        super().__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
 
-        self.inc = DoubleConv(n_channels, 16)
+        self.inc = ResConv(n_channels, 16)
         self.down1 = Down(16, 32)
         self.down2 = Down(32, 64)
-        self.down3 = Down(64, 512)
+        self.down3 = Down(64, 128)
 
-        self.up2 = Up(576, 64)
+        self.up2 = Up(192, 64)
         self.up3 = Up(96, 32)
         self.up4 = Up(48, 16)
         self.out = OutConv(16, n_classes)
-        self.outact = nn.Sigmoid()
 
     def forward(self, x):
         x1 = self.inc(x)
@@ -107,6 +86,5 @@ class ResUnet(nn.Module):
         x = self.up3(x, x2)
         x = self.up4(x, x1)
         logits = self.out(x)
-        outputs = self.outact(logits)
 
-        return outputs
+        return logits

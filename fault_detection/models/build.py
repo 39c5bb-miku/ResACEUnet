@@ -1,6 +1,6 @@
 from .UNet3 import UNet3
-from .ResUNet import ResUNet
-from .ResACEUNet import ResACEUNet2
+from .ResUnet import ResUNet
+from .ResACEUnet import ResACEUNet2
 from .SwinUNETR import SwinUNETR
 
 
@@ -24,7 +24,7 @@ def build_model(config):
             n_channels=config.model.in_chans,
             n_classes=config.model.num_classes
     )
-    elif model_type == 'SWIN_UNETR':
+    elif model_type == 'SWINUNETR':
         model = SwinUNETR(
             in_channels=config.model.in_chans,
             out_channels=config.model.num_classes,

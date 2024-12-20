@@ -101,7 +101,7 @@ def fault(seismic_path,fault_path,type,num):
         plt.savefig('fault_time.png')
 
 if __name__ == '__main__':
-    seismic_path = r"datasets\test\seismic\F31.npy"
-    fault_path = r"train history\UNET2\F31.npy"
+    seismic_path = r""
+    fault_path = r""
     seismic(seismic_path,0,1)
     fault(seismic_path,fault_path,0,1)

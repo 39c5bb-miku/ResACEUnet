@@ -176,7 +176,7 @@ def train(config, model, criterion, data_loader, optimizer, epoch, lr_scheduler,
             optimizer.step()
         optimizer.zero_grad()
 
-        lr_scheduler.step_update(epoch * num_steps + idx)
+        lr_scheduler.step()
         loss_meter.update(loss)
         if idx == 0 or (idx+1) % config.train.print_freq == 0 or idx == num_steps - 1:
             lr = optimizer.param_groups[0]['lr']

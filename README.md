@@ -66,3 +66,17 @@ The seismic3D function in `utils/result_3D.py` can be used to view 3D seismic im
 ## Tip
 
 If an error occurs with NaN, it might be due to model initialization issues. Try running the process again or modify the seed and run again.
+
+## Cite us
+
+```bibtex
+@article{zu2024resaceunet,
+  title={ResACEUnet: An improved transformer Unet model for 3D seismic fault detection},
+  author={Zu, Shaohuan and Zhao, Penghui and Ke, Chaofan and Junxing, Cao},
+  journal={Journal of Geophysical Research: Machine Learning and Computation},
+  volume={1},
+  number={3},
+  pages={e2024JH000232},
+  year={2024},
+  publisher={Wiley Online Library}
+}

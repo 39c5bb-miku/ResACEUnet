@@ -77,7 +77,7 @@ def seismic3D(seismic_path):
     app.run()
 
 if __name__ == '__main__':
-    seismic_path = r"datasets\test\seismic\F31.npy"
-    fault_path = r"train history\3层UNET\F31.npy"
+    seismic_path = r""
+    fault_path = r""
     # seismic3D(seismic_path)
     fault3D(seismic_path,fault_path)

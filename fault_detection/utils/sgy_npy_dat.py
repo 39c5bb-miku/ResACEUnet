@@ -163,10 +163,10 @@ def dat_npy(dat_file,npy_file,shape=(128,128,128)):
     np.save(npy_file, data)
 
 if __name__ == '__main__':
-	output_folder=r'F:\下载\The_benchmark_skeletonization_datasets\parallel_class\1.dat'
-	input_folder=r'1.npy'
-	sgy=r'RTM_P_T_32f_S2_4100-6000.sgy'
-	npy=r'datasets\test\seismic\Parihaka1.npy'
+	output_folder=r't'
+	input_folder=r''
+	sgy=r''
+	npy=r''
 	# results = np.load(os.path.join(output_folder,npy))
 	# save_inregular_seisdata(results,input_folder,output_folder,sgy,fix='ai')
 	create_segyfile_by_npy(1,1,0,1,npy)

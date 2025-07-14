@@ -35,7 +35,7 @@ conda env create -f environment.yml
 
 ## Training
 
-Download the training datasets [https://pan.baidu.com/s/1Ga2MNm812T-wcb07j34f8w?pwd=xoqi](https://pan.baidu.com/s/1NjiM6KwRKfMPJJ2wDDGTqA?pwd=x0b0) and place the extracted files in the `datasets`.
+Download the training datasets [https://pan.baidu.com/s/1NjiM6KwRKfMPJJ2wDDGTqA?pwd=x0b0](https://pan.baidu.com/s/1NjiM6KwRKfMPJJ2wDDGTqA?pwd=x0b0) and place the extracted files in the `datasets`.
 
 Hyperparameters are set in configs/config.yaml, which you can modify as needed.
 

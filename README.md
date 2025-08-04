@@ -37,7 +37,11 @@ conda env create -f environment.yml
 
 Download the training datasets [https://pan.baidu.com/s/1NjiM6KwRKfMPJJ2wDDGTqA?pwd=x0b0](https://pan.baidu.com/s/1NjiM6KwRKfMPJJ2wDDGTqA?pwd=x0b0) or [https://zenodo.org/records/15875813](https://zenodo.org/records/15875813) and place the extracted files in the `datasets`.
 
-Hyperparameters are set in configs/config.yaml, which you can modify as needed.
+Hyperparameters are set in `configs/config.yaml`, which you can modify as needed.
+
+In `config.yaml`, the path should be set to the ​​absolute path of the data files​​ followed by a /.
+
+`main.py` line 283 needs to register for Weights & Biases (wandb) and obtain an API key.
 
 ```commandline
 python main.py
@@ -48,6 +52,8 @@ python main.py
 Place the data for prediction (in npy format) in the `datasets/test/seismic`.
 
 The results of the prediction will be saved in the `datasets/test/fault`.
+
+`predict_3d.py` line 13 needs to be set to the absolute path of the seismic folder.
 
 ```commandline
 python predict_3d.py

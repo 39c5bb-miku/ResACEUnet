@@ -54,7 +54,7 @@ def build_loader(config):
         sampler = train_sampler,
         num_workers=config.data.num_workers,
         pin_memory=config.data.pin_memory,
-        persistent_workers=True,
+        persistent_workers=False,
         generator=g
     )
     val_files = load_decathlon_datalist(datalist_json, True, "validation")
@@ -108,6 +108,6 @@ def get_test_loader(json_dir):
         num_workers=1,
         sampler=test_sampler,
         pin_memory=False,
-        persistent_workers=True,
+        persistent_workers=False,
     )
     return test_loader

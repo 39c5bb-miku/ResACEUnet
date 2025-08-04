@@ -1,16 +1,8 @@
 import os
 import json
 import torch
-import torch.distributed as dist
 from monai.transforms import *
 from monai.data import load_decathlon_datalist,Dataset,DataLoader
-from torch.utils.data.distributed import DistributedSampler
-
-def get_ddp_generator(seed=3407):
-    local_rank = dist.get_rank()
-    g = torch.Generator()
-    g.manual_seed(seed + local_rank)
-    return g
 
 
 def build_loader(config):
@@ -45,36 +37,29 @@ def build_loader(config):
 
     datalist = load_decathlon_datalist(datalist_json, True, "training")
     train_ds = Dataset(data=datalist, transform=train_transform)
-    train_sampler = DistributedSampler(train_ds, shuffle=True)
-    g = get_ddp_generator()
     train_loader = DataLoader(
         train_ds,
         batch_size=config.data.batch_size,
-        shuffle = False,
-        sampler = train_sampler,
+        shuffle = True,
         num_workers=config.data.num_workers,
         pin_memory=config.data.pin_memory,
         persistent_workers=False,
-        generator=g
     )
     val_files = load_decathlon_datalist(datalist_json, True, "validation")
     val_ds = Dataset(data=val_files, transform=val_transform)
-    val_sampler = DistributedSampler(val_ds, shuffle=True)
     val_loader = DataLoader(
         val_ds,
         batch_size=1,
         shuffle=False,
-        sampler=val_sampler,
         num_workers=config.data.num_workers,
         pin_memory=config.data.pin_memory,
-        persistent_workers=True,
+        persistent_workers=False,
     )
 
     return train_loader, val_loader
 
 
-def create_json_files(foldername):
-    imagepath = foldername  ##totalpath=foldername+imagepath
+def create_json_files(imagepath):
     images = os.listdir(imagepath)
     res = {"testing":[]}
     template = {"image":""}
@@ -88,8 +73,7 @@ def create_json_files(foldername):
 
 
 def get_test_loader(json_dir):
-    json_name = create_json_files(json_dir)
-    datalist_json = json_name#os.path.join(json_dir, json_name)
+    datalist_json = create_json_files(json_dir)
     test_transform = Compose(
         [
             LoadImaged(keys=["image"],image_only=False),
@@ -100,13 +84,11 @@ def get_test_loader(json_dir):
     )
     test_files = load_decathlon_datalist(datalist_json, True, "testing")
     test_ds = Dataset(data=test_files, transform=test_transform) 
-    test_sampler = None
     test_loader = DataLoader(
         test_ds,
         batch_size=1,
         shuffle=False,
         num_workers=1,
-        sampler=test_sampler,
         pin_memory=False,
         persistent_workers=False,
     )

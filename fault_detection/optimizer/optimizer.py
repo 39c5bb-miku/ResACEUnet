@@ -5,7 +5,9 @@
 # Written by Ze Liu
 # --------------------------------------------------------
 
-from torch import optim as optim
+from torch.optim.sgd import SGD
+from torch.optim.adamw import AdamW
+from torch.optim.adam import Adam
 
 
 def build_optimizer(config, model):
@@ -14,23 +16,38 @@ def build_optimizer(config, model):
     """
     skip = {}
     skip_keywords = {}
-    if hasattr(model, 'no_weight_decay'):
+    if hasattr(model, "no_weight_decay"):
         skip = model.no_weight_decay()
-    if hasattr(model, 'no_weight_decay_keywords'):
+    if hasattr(model, "no_weight_decay_keywords"):
         skip_keywords = model.no_weight_decay_keywords()
     parameters = set_weight_decay(model, skip, skip_keywords)
 
     opt_lower = config.optimizer.name.lower()
     optimizer = None
-    if opt_lower == 'sgd':
-        optimizer = optim.SGD(parameters, momentum=config.optimizer.momentum, nesterov=True,
-                                lr=config.optimizer.lr, weight_decay=config.optimizer.weight_decay)
-    elif opt_lower == 'adamw':
-        optimizer = optim.AdamW(parameters, eps=config.optimizer.eps, betas=config.optimizer.betas,
-                                lr=config.optimizer.lr, weight_decay=config.optimizer.weight_decay)
-    elif opt_lower == 'adam':
-        optimizer = optim.Adam(parameters, eps=config.optimizer.eps, betas=config.optimizer.betas,
-                                lr=config.optimizer.lr, weight_decay=config.optimizer.weight_decay)
+    if opt_lower == "sgd":
+        optimizer = SGD(
+            parameters,
+            momentum=config.optimizer.momentum,
+            nesterov=True,
+            lr=config.optimizer.lr,
+            weight_decay=config.optimizer.weight_decay,
+        )
+    elif opt_lower == "adamw":
+        optimizer = AdamW(
+            parameters,
+            eps=config.optimizer.eps,
+            betas=config.optimizer.betas,
+            lr=config.optimizer.lr,
+            weight_decay=config.optimizer.weight_decay,
+        )
+    elif opt_lower == "adam":
+        optimizer = Adam(
+            parameters,
+            eps=config.optimizer.eps,
+            betas=config.optimizer.betas,
+            lr=config.optimizer.lr,
+            weight_decay=config.optimizer.weight_decay,
+        )
 
     return optimizer
 
@@ -42,14 +59,17 @@ def set_weight_decay(model, skip_list=(), skip_keywords=()):
     for name, param in model.named_parameters():
         if not param.requires_grad:
             continue  # frozen weights
-        if len(param.shape) == 1 or name.endswith(".bias") or (name in skip_list) or \
-                check_keywords_in_name(name, skip_keywords):
+        if (
+            len(param.shape) == 1
+            or name.endswith(".bias")
+            or (name in skip_list)
+            or check_keywords_in_name(name, skip_keywords)
+        ):
             no_decay.append(param)
             # print(f"{name} has no weight decay")
         else:
             has_decay.append(param)
-    return [{'params': has_decay},
-            {'params': no_decay, 'weight_decay': 0.}]
+    return [{"params": has_decay}, {"params": no_decay, "weight_decay": 0.0}]
 
 
 def check_keywords_in_name(name, keywords=()):

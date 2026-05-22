@@ -1,7 +1,7 @@
 import functools
-import torch
 from torch.nn import functional as F
 import torch.nn as nn
+
 
 class MultipleOutputLoss2(nn.Module):
     def __init__(self, loss, weight_factors=None):
@@ -29,6 +29,7 @@ class MultipleOutputLoss2(nn.Module):
                 l += weights[i] * self.loss(x[i], y[i])
         return l
 
+
 def reduce_loss(loss, reduction):
     """Reduce loss as specified.
 
@@ -39,17 +40,19 @@ def reduce_loss(loss, reduction):
     Returns:
         Tensor: Reduced loss tensor.
     """
-    reduction_enum = F._Reduction.get_enum(reduction)
-    # none: 0, elementwise_mean:1, sum: 2
-    if reduction_enum == 0:
+    if reduction == "none":
         return loss
-    elif reduction_enum == 1:
+    elif reduction == "mean":
         return loss.mean()
-    else:
+    elif reduction == "sum":
         return loss.sum()
+    else:
+        raise ValueError(
+            f"Unsupported reduction mode: {reduction}. Supported modes are: 'none', 'mean', 'sum'."
+        )
 
 
-def weight_reduce_loss(loss, weight=None, reduction='mean'):
+def weight_reduce_loss(loss, weight=None, reduction="mean"):
     """Apply element-wise weight and reduce loss.
 
     Args:
@@ -68,10 +71,10 @@ def weight_reduce_loss(loss, weight=None, reduction='mean'):
         loss = loss * weight
 
     # if weight is not specified or reduction is sum, just reduce the loss
-    if weight is None or reduction == 'sum':
+    if weight is None or reduction == "sum":
         loss = reduce_loss(loss, reduction)
     # if reduction is mean, then compute mean over weight region
-    elif reduction == 'mean':
+    elif reduction == "mean":
         if weight.size(1) > 1:
             weight = weight.sum()
         else:
@@ -113,7 +116,7 @@ def weighted_loss(loss_func):
     """
 
     @functools.wraps(loss_func)
-    def wrapper(pred, target, weight=None, reduction='mean', **kwargs):
+    def wrapper(pred, target, weight=None, reduction="mean", **kwargs):
         # get element-wise loss
         loss = loss_func(pred, target, **kwargs)
         loss = weight_reduce_loss(loss, weight, reduction)
@@ -123,11 +126,15 @@ def weighted_loss(loss_func):
 
 
 def deep_supervision_scale3d(targets):
-    B, C, H, W, D=targets.shape
-    newtargets=[]
+    B, C, H, W, D = targets.shape
+    newtargets = []
     newtargets.append(targets)
-    targetsd4 = torch.nn.functional.interpolate(input=targets, size=(H // 4, W // 4, D//4), mode='nearest',align_corners=None)
-    targetsd8 = torch.nn.functional.interpolate(input=targets, size=(H // 8, W // 8, D//8),mode='nearest',align_corners=None)
+    targetsd4 = F.interpolate(
+        input=targets, size=(H // 4, W // 4, D // 4), mode="nearest"
+    )
+    targetsd8 = F.interpolate(
+        input=targets, size=(H // 8, W // 8, D // 8), mode="nearest"
+    )
     newtargets.append(targetsd4)
     newtargets.append(targetsd8)
     return newtargets

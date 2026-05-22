@@ -1,7 +1,8 @@
 import torch.nn as nn
-from monai import losses
+from monai.losses.dice import DiceLoss, DiceCELoss, DiceFocalLoss
 
-class CrossEntropyLoss(nn.Module):
+
+class CrossEntropy(nn.Module):
     def __init__(self):
         super().__init__()
         self._loss = nn.CrossEntropyLoss(reduction="mean")
@@ -9,6 +10,8 @@ class CrossEntropyLoss(nn.Module):
     def forward(self, predictions, targets):
         loss = self._loss(predictions, targets)
         return loss
+
+
 ###########################################################################
 class BinaryCrossEntropyWithLogits(nn.Module):
     def __init__(self):
@@ -18,47 +21,55 @@ class BinaryCrossEntropyWithLogits(nn.Module):
     def forward(self, predictions, tragets):
         loss = self._loss(predictions, tragets)
         return loss
+
+
 ###########################################################################
-class DiceLoss(nn.Module):
+class Dice(nn.Module):
     def __init__(self):
         super().__init__()
-        self._loss = losses.DiceLoss(to_onehot_y=False, sigmoid=True)
+        self._loss = DiceLoss(to_onehot_y=False, sigmoid=True)
 
     def forward(self, predicted, target):
         loss = self._loss(predicted, target)
         return loss
+
+
 ###########################################################################
-class DiceCELoss(nn.Module):
+class DiceCE(nn.Module):
     def __init__(self):
         super().__init__()
-        self._loss = losses.DiceCELoss(to_onehot_y=False, sigmoid=True)
+        self._loss = DiceCELoss(to_onehot_y=False, sigmoid=True)
 
     def forward(self, predicted, target):
         loss = self._loss(predicted, target)
         return loss
+
+
 ###########################################################################
-class DiceFocalLoss(nn.Module):
+class DiceFocal(nn.Module):
     def __init__(self):
         super().__init__()
-        self._loss = losses.DiceFocalLoss(to_onehot_y=False, sigmoid=True)
+        self._loss = DiceFocalLoss(to_onehot_y=False, sigmoid=True)
 
     def forward(self, predicted, target):
         loss = self._loss(predicted, target)
         return loss
+
+
 ###########################################################################
 def build_loss_fn(config):
     if config.loss.name == "ce":
-        return CrossEntropyLoss()
+        return CrossEntropy()
 
     elif config.loss.name == "bce":
         return BinaryCrossEntropyWithLogits()
 
     elif config.loss.name == "dice":
-        return DiceLoss()
+        return Dice()
 
     elif config.loss.name == "dice_ce":
-        return DiceCELoss()
+        return DiceCE()
     elif config.loss.name == "dice_focal":
-        return DiceFocalLoss()
+        return DiceFocal()
     else:
         raise ValueError("must be cross entropy or soft dice loss for now!")

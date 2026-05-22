@@ -1,6 +1,6 @@
 # ResACEUnet
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15875813.svg)](https://doi.org/10.5281/zenodo.15875813)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20339874.svg)](https://doi.org/10.5281/zenodo.20339874)
 
 <div align=center>
     <img src="ResACEUnet.png" width=100% />
@@ -14,7 +14,7 @@ Detecting fault constitutes a pivotal aspect of seismic interpretation, signific
 
 ```commandline
 fault_detection/
-      ├───── datasets/
+      ├───── data/
       │        ├───── 200-20/
       │        │        ├───── train/
       │        │        │         ├───── images  # 200 train data put here
@@ -22,22 +22,31 @@ fault_detection/
       │        │        └───── val/
       │        │                  ├───── images  # 20 val data put here
       │        │                  └───── labels
-      │ 
-      │ 
+      │        └───── test/
+      │                 ├──── seismic/
+      │                 │
+      │                 └──── fault/
       └───── ...
 ```
 
 ## Environment Setup
 
 ```commandline
-conda env create -f environment.yml
+conda env create -n fault python=3.11 -y
+conda activate fault
+cd fault_detection
+pip install -e .
+git clone https://github.com/KeKsBoTer/torch-dwt
+cd torch-dwt
+pip install -e .
+cd ..
 ```
 
 ## Training
 
-Download the training datasets [https://pan.baidu.com/s/1NjiM6KwRKfMPJJ2wDDGTqA?pwd=x0b0](https://pan.baidu.com/s/1NjiM6KwRKfMPJJ2wDDGTqA?pwd=x0b0) or [https://zenodo.org/records/15875813](https://zenodo.org/records/15875813) and place the extracted files in the `datasets`.
+Download the training datasets [https://zenodo.org/records/20339874](https://zenodo.org/records/20339874) and place the extracted files in the `data`.
 
-Hyperparameters are set in `configs/config.yaml`, which you can modify as needed.
+Hyperparameters are set in `config/config.yaml`, which you can modify as needed.
 
 In `config.yaml`, the path should be set to the ​​absolute path of the data files​​ followed by a /.
 
@@ -49,11 +58,9 @@ python main.py
 
 ## Testing
 
-Place the data for prediction (in npy format) in the `datasets/test/seismic`.
+Place the data for prediction (in npy format) in the `data/test/seismic`.
 
-The results of the prediction will be saved in the `datasets/test/fault`.
-
-`predict_3d.py` line 13 needs to be set to the absolute path of the seismic folder.
+The results of the prediction will be saved in the `data/test/fault`.
 
 ```commandline
 python predict_3d.py
@@ -61,13 +68,7 @@ python predict_3d.py
 
 ## Visualization
 
-The seismic3D function in `utils/result_3D.py` can be used to view 3D seismic images, and the fault3D function can be used to view 3D seismic fault images. Modify seismic_path and fault_path as needed.
-
-`utils/result_2D.py` can be used to view 3D seismic sections or slices and save them as jpg files. Modify type to represent which dimension of the data, num to represent which face, and file to represent the data name as needed.
-
-`utils/sgy_npy_dat.py` can convert npy files to sgy files. Modify predicted_file as needed.
-
-`utils/readsgy.ipynb` can read sgy data and convert it to npy data.
+The seismic3D function in `util/result_3D.py` can be used to view 3D seismic images, and the fault3D function can be used to view 3D seismic fault images. Modify seismic_path and fault_path as needed.
 
 ## Tip
 

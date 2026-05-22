@@ -4,6 +4,8 @@ from omegaconf import OmegaConf
 
 def get_config(path):
     config = OmegaConf.load(path)
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ['CUDA_VISIBLE_DEVICES'] = config.gpu
     config.gpu_num = torch.cuda.device_count()
     overrides = OmegaConf.from_cli()
     config = OmegaConf.merge(config, overrides)

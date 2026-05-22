@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "resaceunet"
+version = "0.1.0"
+description = "A deep learning project for 3D segmentation/detection"
+readme = "README.md"
+authors = [
+  { name = "zph", email = "zph2000@gmail.com" }
+]
+license = "MIT"
+requires-python = ">=3.11"
+
+dependencies = [
+    "torch==2.8.0",
+    "torchvision==0.23.0",
+    "torchaudio==2.8.0",
+    "monai==1.5.2",
+    "omegaconf==2.3.0",
+    "wandb==0.27.0",
+    "cigvis==0.3.1",
+    "loguru==0.7.3",
+    "tqdm==4.67.3",
+]
+

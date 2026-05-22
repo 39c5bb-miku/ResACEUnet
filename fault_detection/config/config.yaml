@@ -1,0 +1,56 @@
+data:
+  batch_size: 16
+  img_size: 64
+  pin_memory: True
+  num_workers: 8
+  path: data/200-20/
+  json_path: "data"
+  json_name: "dataset.json"
+
+model:
+  name: "UNET3"
+  in_chans: 1
+  num_classes: 1
+  ds: False
+  drop: 0.
+  attn_drop: 0.
+  drop_path: 0.
+  resume: ""
+
+train:
+  amp: True
+  start_epoch: 0
+  epochs: 10
+  clip_grad: False
+  auto_resume: True
+  patience: 100
+  output: "output"
+  save_freq: 10
+  print_freq: 10
+  seed: 20250314
+
+lr_scheduler:
+  name: "cosine"
+  warmup_epochs: 0
+  min_lr: 6e-6
+
+optimizer:
+  name: "adamw"
+  betas: [0.9, 0.999]
+  eps: 1e-8
+  momentum: 0.9
+  lr: 1e-3
+  weight_decay: 1e-2
+
+loss:
+  name: "dice"
+
+aug:
+  mixup: False
+  lambdaa: 0.2
+
+wandb: False
+
+gpu: "0"
+
+gpu_num: s
